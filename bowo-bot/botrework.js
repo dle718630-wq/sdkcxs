@@ -1,5 +1,24 @@
 const mineflayer = require('mineflayer');
 const readline = require('readline');
+const http = require('http');
+
+// ============================================================
+// RENDER WEB SERVER
+// ============================================================
+
+const WEB_PORT = process.env.PORT || 3000;
+
+const webServer = http.createServer((req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/plain'
+  });
+
+  res.end('Bowo Minecraft bot is running!');
+});
+
+webServer.listen(WEB_PORT, '0.0.0.0', () => {
+  console.log(`[WEB] Listening on port ${WEB_PORT}`);
+});
 
 // ============================================================
 // CONFIG
@@ -10,24 +29,18 @@ const config = {
   port: 25565,
   username: 'Bowo1',
   version: '1.21.4',
-  password: '123456dung'
+
+  // Put your password in Render Environment Variables
+  password: process.env.123456dung
 };
 
 // ============================================================
 // SETTINGS
 // ============================================================
 
-// Mineflayer default = 30 seconds.
-// 5 minutes gives more tolerance to temporary lag.
 const checkTimeoutInterval = 300000;
-
-// Reconnect after 5 seconds
 const reconnectDelay = 5000;
-
-// Wait before /login after spawn
 const loginDelay = 1500;
-
-// Wait between /login and /afk
 const afkDelay = 2500;
 
 // ============================================================
@@ -41,8 +54,6 @@ let loginTimer = null;
 let afkTimer = null;
 
 let shuttingDown = false;
-
-// Prevent repeated "tick_end enabled" messages
 let tickEndMessageShown = false;
 
 // ============================================================
@@ -120,7 +131,6 @@ function cleanText(value) {
 // ============================================================
 
 function getSenderName(packet, bot) {
-  // Direct sender name
   if (packet.senderName) {
     const name = cleanText(packet.senderName);
 
@@ -129,7 +139,6 @@ function getSenderName(packet, bot) {
     }
   }
 
-  // Try UUID -> player list
   const uuid =
     packet.senderUuid ||
     packet.sender;
@@ -197,17 +206,7 @@ function clearBotTimers() {
 }
 
 // ============================================================
-// SEND CLIENT TICK END
-// ============================================================
-//
-// Minecraft 1.21.3+ has the serverbound "tick_end" packet.
-//
-// Grim's TickTimer uses this packet as the boundary between
-// client ticks. Mineflayer does not yet send it in its normal
-// released physics implementation, so we add it here.
-//
-// IMPORTANT:
-// The packet is called "tick_end", NOT "client_tick_end".
+// TICK END
 // ============================================================
 
 function setupTickEnd(bot) {
@@ -236,8 +235,6 @@ function setupTickEnd(bot) {
       }
 
     } catch (err) {
-      // If the installed protocol does not know this packet,
-      // do not crash the entire bot.
       if (!tickEndMessageShown) {
         console.log(
           '[BOT] tick_end packet is not available in this protocol.'
@@ -260,8 +257,15 @@ function createBot() {
 
   clearBotTimers();
 
-  // Reset this so every fresh connection can report its state
   tickEndMessageShown = false;
+
+  if (!config.password) {
+    console.error(
+      '[CONFIG] MC_PASSWORD is missing.'
+    );
+
+    return;
+  }
 
   console.log(
     `[BOT] Đang kết nối ${config.host}:${config.port}...`
@@ -273,10 +277,7 @@ function createBot() {
     username: config.username,
     version: config.version,
 
-    // Keep Minecraft keepalive enabled
     keepAlive: true,
-
-    // 5-minute Mineflayer timeout instead of the default 30s
     checkTimeoutInterval: checkTimeoutInterval
   });
 
@@ -352,10 +353,6 @@ function createBot() {
   bot.once('spawn', () => {
     console.log('[BOT] Đã vào server.');
 
-    // --------------------------------------------------------
-    // LOGIN
-    // --------------------------------------------------------
-
     loginTimer = setTimeout(() => {
       if (shuttingDown) {
         return;
@@ -365,22 +362,15 @@ function createBot() {
         console.log(
           '[BOT] Chưa sẵn sàng để /login.'
         );
+
         return;
       }
 
-      console.log(
-        '[BOT] Gửi /login...'
-      );
+      console.log('[BOT] Gửi /login...');
 
-      bot.chat(
-        `/login ${config.password}`
-      );
+      bot.chat(`/login ${config.password}`);
 
       loginTimer = null;
-
-      // ------------------------------------------------------
-      // AFK
-      // ------------------------------------------------------
 
       afkTimer = setTimeout(() => {
         if (shuttingDown) {
@@ -391,12 +381,11 @@ function createBot() {
           console.log(
             '[BOT] Mất kết nối trước khi gửi /afk.'
           );
+
           return;
         }
 
-        console.log(
-          '[BOT] Gửi /afk...'
-        );
+        console.log('[BOT] Gửi /afk...');
 
         bot.chat('/afk');
 
@@ -422,10 +411,7 @@ function createBot() {
   // ==========================================================
 
   bot.on('kicked', (reason) => {
-    console.log(
-      '[KICKED]',
-      reason
-    );
+    console.log('[KICKED]', reason);
 
     const readable = cleanText(reason);
 
@@ -477,7 +463,6 @@ function scheduleReconnect() {
     return;
   }
 
-  // Prevent duplicate reconnect timers
   if (reconnectTimer) {
     return;
   }
@@ -524,21 +509,16 @@ rl.on('line', (input) => {
     return;
   }
 
-  // Example:
-  // hi
-  // /spawn
-  // /msg player hello
-
   currentBot.chat(message);
 
   rl.prompt();
 });
 
 // ============================================================
-// CTRL + C
+// SHUTDOWN
 // ============================================================
 
-rl.on('SIGINT', () => {
+function shutdown() {
   if (shuttingDown) {
     return;
   }
@@ -562,10 +542,21 @@ rl.on('SIGINT', () => {
     } catch {}
   }
 
+  try {
+    webServer.close();
+  } catch {}
+
   setTimeout(() => {
     process.exit(0);
   }, 500);
-});
+}
+
+// Local PC
+rl.on('SIGINT', shutdown);
+
+// Render / Linux
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 // ============================================================
 // GLOBAL ERROR HANDLING
