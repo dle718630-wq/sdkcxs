@@ -30,7 +30,7 @@ const config = {
   username: 'Bowo1',
   version: '1.21.4',
 
-  // Put your password in Render Environment Variables
+  // Render Environment Variable
   password: process.env.MC_PASSWORD
 };
 
@@ -38,9 +38,17 @@ const config = {
 // SETTINGS
 // ============================================================
 
+// Mineflayer default = 30 seconds.
+// 5 minutes gives more tolerance to temporary lag.
 const checkTimeoutInterval = 300000;
+
+// Reconnect after 5 seconds
 const reconnectDelay = 5000;
+
+// Wait before /login after spawn
 const loginDelay = 1500;
+
+// Wait between /login and /afk
 const afkDelay = 2500;
 
 // ============================================================
@@ -54,7 +62,6 @@ let loginTimer = null;
 let afkTimer = null;
 
 let shuttingDown = false;
-let tickEndMessageShown = false;
 
 // ============================================================
 // TEXT HELPERS
@@ -131,6 +138,7 @@ function cleanText(value) {
 // ============================================================
 
 function getSenderName(packet, bot) {
+  // Direct sender name
   if (packet.senderName) {
     const name = cleanText(packet.senderName);
 
@@ -139,6 +147,7 @@ function getSenderName(packet, bot) {
     }
   }
 
+  // Try UUID -> player list
   const uuid =
     packet.senderUuid ||
     packet.sender;
@@ -206,47 +215,6 @@ function clearBotTimers() {
 }
 
 // ============================================================
-// TICK END
-// ============================================================
-
-function setupTickEnd(bot) {
-  bot.on('physicsTick', () => {
-    if (shuttingDown) {
-      return;
-    }
-
-    if (!bot._client) {
-      return;
-    }
-
-    if (bot._client.state !== 'play') {
-      return;
-    }
-
-    try {
-      bot._client.write('tick_end', {});
-
-      if (!tickEndMessageShown) {
-        console.log(
-          '[BOT] tick_end packets enabled.'
-        );
-
-        tickEndMessageShown = true;
-      }
-
-    } catch (err) {
-      if (!tickEndMessageShown) {
-        console.log(
-          '[BOT] tick_end packet is not available in this protocol.'
-        );
-
-        tickEndMessageShown = true;
-      }
-    }
-  });
-}
-
-// ============================================================
 // CREATE BOT
 // ============================================================
 
@@ -256,8 +224,6 @@ function createBot() {
   }
 
   clearBotTimers();
-
-  tickEndMessageShown = false;
 
   if (!config.password) {
     console.error(
@@ -277,17 +243,14 @@ function createBot() {
     username: config.username,
     version: config.version,
 
+    // Keep Minecraft keepalive enabled
     keepAlive: true,
+
+    // 5-minute Mineflayer timeout
     checkTimeoutInterval: checkTimeoutInterval
   });
 
   currentBot = bot;
-
-  // ==========================================================
-  // TICK END
-  // ==========================================================
-
-  setupTickEnd(bot);
 
   // ==========================================================
   // RAW PLAYER CHAT
@@ -353,6 +316,10 @@ function createBot() {
   bot.once('spawn', () => {
     console.log('[BOT] Đã vào server.');
 
+    // --------------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------------
+
     loginTimer = setTimeout(() => {
       if (shuttingDown) {
         return;
@@ -366,11 +333,19 @@ function createBot() {
         return;
       }
 
-      console.log('[BOT] Gửi /login...');
+      console.log(
+        '[BOT] Gửi /login...'
+      );
 
-      bot.chat(`/login ${config.password}`);
+      bot.chat(
+        `/login ${config.password}`
+      );
 
       loginTimer = null;
+
+      // ------------------------------------------------------
+      // AFK
+      // ------------------------------------------------------
 
       afkTimer = setTimeout(() => {
         if (shuttingDown) {
@@ -385,7 +360,9 @@ function createBot() {
           return;
         }
 
-        console.log('[BOT] Gửi /afk...');
+        console.log(
+          '[BOT] Gửi /afk...'
+        );
 
         bot.chat('/afk');
 
@@ -411,7 +388,10 @@ function createBot() {
   // ==========================================================
 
   bot.on('kicked', (reason) => {
-    console.log('[KICKED]', reason);
+    console.log(
+      '[KICKED]',
+      reason
+    );
 
     const readable = cleanText(reason);
 
@@ -463,6 +443,7 @@ function scheduleReconnect() {
     return;
   }
 
+  // Prevent duplicate reconnect timers
   if (reconnectTimer) {
     return;
   }
@@ -509,6 +490,11 @@ rl.on('line', (input) => {
     return;
   }
 
+  // Examples:
+  // hi
+  // /spawn
+  // /msg player hello
+
   currentBot.chat(message);
 
   rl.prompt();
@@ -551,10 +537,10 @@ function shutdown() {
   }, 500);
 }
 
-// Local PC
+// Ctrl+C
 rl.on('SIGINT', shutdown);
 
-// Render / Linux
+// Render/Linux shutdown
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
