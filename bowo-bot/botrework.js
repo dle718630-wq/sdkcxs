@@ -31,7 +31,7 @@ const config = {
   version: '1.21.4',
 
   // Put your password in Render Environment Variables
-  password: process.env.123456dung
+  password: process.env.MC_PASSWORD
 };
 
 // ============================================================
