@@ -567,3 +567,25 @@ process.on('unhandledRejection', (err) => {
 // ============================================================
 
 createBot();
+
+// LOG TRẠNG THÁI MỖI 15 PHÚT
+setInterval(() => {
+  const connected = Boolean(
+    currentBot &&
+    currentBot.player &&
+    currentBot._client &&
+    !currentBot._client.ended
+  );
+
+  const time = new Date().toLocaleString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh'
+  });
+
+  console.log(
+    `[BOT] Trạng thái: ${
+      connected
+        ? 'ĐANG KẾT NỐI'
+        : 'CHƯA KẾT NỐI / ĐANG KẾT NỐI LẠI'
+    } | Máy chủ: ${config.host}:${config.port} | ${time}`
+  );
+}, 15 * 60 * 1000);
